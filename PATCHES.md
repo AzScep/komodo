@@ -11,7 +11,7 @@ Drop a patch as soon as upstream ships an equivalent fix.
 
 | Patch | Upstream issue | Component | Status upstream |
 | --- | --- | --- | --- |
-| Redact env_file secrets from stored compose config | moghtech/komodo#1636 | Periphery | Fix proposed upstream |
+| Redact env_file secrets from stored compose config | moghtech/komodo#1636 | Periphery | Proposed in moghtech/komodo#1644 |
 
 ## Published images
 
