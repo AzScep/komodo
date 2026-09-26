@@ -21,7 +21,7 @@ env:
   # so an upstream Core of the same release accepts it.
   UPSTREAM_VERSION: "2.3.3"
   # Increment when the carried patch set (PATCHES.md) changes.
-  FORK_REVISION: "1"
+  FORK_REVISION: "2"
   IMAGE: ghcr.io/azscep/komodo-periphery
 
 jobs:

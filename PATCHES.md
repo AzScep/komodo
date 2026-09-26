@@ -12,6 +12,7 @@ Drop a patch as soon as upstream ships an equivalent fix.
 | Patch | Upstream issue | Component | Status upstream |
 | --- | --- | --- | --- |
 | Redact env_file secrets from stored compose config | moghtech/komodo#1636 | Periphery | Proposed in moghtech/komodo#1644 |
+| Send extra websocket headers to Core from a root-only file (`core_headers_file`) | None | Periphery | Proposed in moghtech/komodo#1649 |
 
 ## Published images
 
