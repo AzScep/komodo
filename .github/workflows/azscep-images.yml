@@ -1,11 +1,13 @@
-name: Publish AzScep Periphery image
+name: Publish AzScep images
 
-# Builds Periphery from this fork's patched release branch and publishes it
-# to ghcr.io/azscep/komodo-periphery. Upstream images remain the source for
-# every component this fork does not patch (Core, UI).
+# Builds Core (with the UI) and Periphery from this fork's patched release
+# branch and publishes them to ghcr.io/azscep/komodo-core and
+# ghcr.io/azscep/komodo-periphery. Deploy both at the same tag.
 
 on:
   push:
+    branches: ["azscep/*.x"]
+  pull_request:
     branches: ["azscep/*.x"]
   workflow_dispatch:
 
@@ -13,20 +15,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: azscep-periphery-${{ github.ref }}
+  group: azscep-images-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  # Upstream release this branch is based on. Periphery reports this version
-  # so an upstream Core of the same release accepts it.
+  # Upstream release this branch is based on. Core and Periphery report this
+  # version so they accept each other and upstream components of the release.
   UPSTREAM_VERSION: "2.3.3"
   # Increment when the carried patch set (PATCHES.md) changes.
-  FORK_REVISION: "2"
-  IMAGE: ghcr.io/azscep/komodo-periphery
+  FORK_REVISION: "3"
 
 jobs:
   test:
-    name: Test Periphery
+    name: Test
     runs-on: ubuntu-latest
     container: rust:1.98.0-trixie
     steps:
@@ -37,13 +38,23 @@ jobs:
         run: rustup component add rustfmt
       - name: Check formatting
         run: cargo fmt --all -- --check
+      - name: Run client tests
+        run: cargo test -p komodo_client --lib
+      - name: Run Core tests
+        run: cargo test -p komodo_core --bin core
       - name: Run Periphery tests
         run: cargo test -p komodo_periphery --bin periphery
 
   publish:
-    name: Build and publish image
+    name: Build and publish ${{ matrix.component }}
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [core, periphery]
+    env:
+      IMAGE: ghcr.io/azscep/komodo-${{ matrix.component }}
     permissions:
       contents: read
       packages: write
@@ -62,7 +73,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: bin/periphery/aio.Dockerfile
+          file: bin/${{ matrix.component }}/aio.Dockerfile
           platforms: linux/amd64
           push: true
           build-args: |
