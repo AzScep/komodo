@@ -39,6 +39,7 @@ esac
 WORK="$(mktemp -d "$(dirname -- "$OUTPUT")/.komodo-age-decrypt.XXXXXX")" || fail "cannot create a temporary directory beside $OUTPUT"
 readonly WORK
 trap 'rm -rf -- "$WORK"' EXIT
+trap 'exit 1' INT TERM HUP
 : > "$WORK/out" || fail "cannot write a temporary file beside $OUTPUT"
 
 # Plain settings in the env file, so a secret cannot be silently overridden by
@@ -48,6 +49,7 @@ while IFS= read -r line || [ -n "$line" ]; do
   line="${line%$'\r'}"
   case "$line" in
     AGE_*) ;;
+    export\ *=*) key="${line#export }"; settings["${key%%=*}"]=1 ;;
     [A-Za-z_]*=*) settings["${line%%=*}"]=1 ;;
   esac
 done < "$ENV_FILE"
@@ -67,29 +69,34 @@ while IFS= read -r line || [ -n "$line" ]; do
   [ -z "${seen[$name]:-}" ] || fail "secret $name is listed twice"
   seen["$name"]=1
   [ -z "${settings[$name]:-}" ] || fail "secret $name is also set as a plain setting, which would override it"
+  # Compose interpolates from its own environment before any env file.
+  [ -z "${!name+set}" ] || fail "secret $name is also set in Periphery's environment, which would override it"
   [ -n "$ciphertext" ] || fail "secret $name has no ciphertext"
 
-  plain="$WORK/plain"
   if ! printf '%s' "$ciphertext" | base64 -d > "$WORK/cipher" 2> "$WORK/err"; then
     fail "secret $name: ciphertext is not valid base64"
   fi
-  if ! age -d -i "$IDENTITY" -o "$plain" "$WORK/cipher" 2> "$WORK/err"; then
+  # The plaintext stays in memory, never on disk: each check decrypts again.
+  if ! size="$(age -d -i "$IDENTITY" "$WORK/cipher" 2> "$WORK/err" | wc -c)"; then
     fail "secret $name: age could not decrypt it ($(head -n 1 "$WORK/err" | head -c 300))"
   fi
   # Line breaks, NUL, and other control characters cannot be written as one
   # env-file line; refuse rather than change the value.
-  # shellcheck disable=SC2094 # both sides only read the file
-  if ! tr -d '\000-\037\177' < "$plain" | cmp -s - "$plain"; then
-    fail "secret $name contains a line break or control character, which an env file cannot hold"
-  fi
-  value="$(cat -- "$plain")" || fail "secret $name: cannot read the decrypted value"
-  # Single quotes keep the value literal in compose env files: no escapes and
-  # no ${...} interpolation. A value holding a single quote cannot be written.
+  printable="$(age -d -i "$IDENTITY" "$WORK/cipher" 2> /dev/null | LC_ALL=C tr -d '\000-\037\177' | wc -c)" ||
+    fail "secret $name: age could not decrypt it"
+  [ "$size" -eq "$printable" ] || fail "secret $name contains a line break or control character, which an env file cannot hold"
+  value="$(age -d -i "$IDENTITY" "$WORK/cipher" 2> /dev/null)" || fail "secret $name: age could not decrypt it"
+  # Single quotes keep the value literal in compose env files: no ${...}
+  # interpolation, and a backslash is literal except before a quote. So a value
+  # holding a single quote, or ending in a backslash (which would escape the
+  # closing quote, and compose would then print the value in its parse error),
+  # cannot be written.
   case "$value" in
     *"'"*) fail "secret $name contains a single quote, which an env file cannot hold literally" ;;
+    *\\) fail "secret $name ends in a backslash, which an env file cannot hold literally" ;;
   esac
   printf "%s='%s'\n" "$name" "$value" >> "$WORK/out" || fail "cannot write $name to a temporary file"
-  rm -f -- "$plain" "$WORK/cipher"
+  rm -f -- "$WORK/cipher"
   echo "decrypted $name"
   count=$((count + 1))
 done < "$ENV_FILE"
