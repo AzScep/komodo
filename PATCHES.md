@@ -27,7 +27,8 @@ Revisions 1 and 2 carried only Periphery patches and published only Periphery.
 From revision 4 the Periphery image carries Debian's `age` and `/usr/local/bin/komodo-age-decrypt` ([source](bin/periphery/komodo-age-decrypt), [tests](bin/periphery/tests/komodo-age-decrypt.test.sh)).
 A stack keeps each secret in its `environment` as `AGE_<NAME>=<base64 age ciphertext>`, sets `additional_env_files` to `[{path: secrets.env, track: false}]`, and runs `komodo-age-decrypt .env secrets.env` as its `pre_deploy`.
 The script decrypts every secret with the server's age identity and writes `NAME='value'` lines to `secrets.env` with mode 0600, replacing the file only when every secret decrypted.
-It exits non-zero, so the deploy stops before `compose up`, when a secret fails to decrypt, is listed twice, shares its name with a plain setting, or holds a single quote, a line break, or another control character.
+It exits non-zero, so the deploy stops before `compose up`, when a secret fails to decrypt, is listed twice, shares its name with a plain setting or a variable in Periphery's environment, holds a single quote, a line break, or another control character, or ends in a backslash.
+Every `environment` line starting `AGE_` is taken as a secret, so a plain setting must not use that prefix.
 It prints secret names, never values.
 
 Mount the server's age identity read-only at `/config/age.key` (or set `KOMODO_AGE_IDENTITY`); the script refuses an identity readable by group or others.

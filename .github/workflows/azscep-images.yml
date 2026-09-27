@@ -84,23 +84,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build for testing
-        if: matrix.component == 'periphery'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: bin/periphery/aio.Dockerfile
-          platforms: linux/amd64
-          load: true
-          build-args: |
-            VERSION=${{ env.UPSTREAM_VERSION }}
-          tags: periphery-under-test
-      - name: Run decrypt script tests in the image
-        if: matrix.component == 'periphery'
-        run: |
-          docker run --rm --entrypoint bash \
-            -v "$PWD/bin/periphery/tests:/tests:ro" periphery-under-test \
-            -c 'apt-get update -qq && apt-get install -y -qq jq > /dev/null && /tests/komodo-age-decrypt.test.sh /usr/local/bin/komodo-age-decrypt'
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -118,6 +101,16 @@ jobs:
             org.opencontainers.image.source=https://github.com/AzScep/komodo
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ env.UPSTREAM_VERSION }}-azscep.${{ env.FORK_REVISION }}
+      # Test the exact digest that was pushed, so the digest recorded for
+      # deploys is the one these checks ran against.
+      - name: Run decrypt script tests in the published image
+        if: matrix.component == 'periphery'
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$PWD/bin/periphery/tests:/tests:ro" "${IMAGE}@${DIGEST}" \
+            -c 'apt-get update -qq && apt-get install -y -qq jq > /dev/null && /tests/komodo-age-decrypt.test.sh /usr/local/bin/komodo-age-decrypt'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
       - name: Record digest
         run: |
           echo "Published ${IMAGE}@${DIGEST}" >> "$GITHUB_STEP_SUMMARY"

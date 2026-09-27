@@ -2,6 +2,8 @@
 
 ## Periphery deps installer
 
+set -eu
+
 apt-get update
 apt-get install -y git curl wget ca-certificates age
 

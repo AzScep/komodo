@@ -98,6 +98,7 @@ services:
       FROM_INTERPOLATION: ${DOLLARS}
 EOF
 if (cd "$dir" && docker compose --env-file secrets.env -f compose.yml config --format json > config.json 2> config.err); then
+  grep -q -- "$CANARY" "$dir/config.err" && bad "happy: docker compose printed a secret value"
   pass "happy: docker compose parses secrets.env"
   # compose config prints a compose file, so each literal $ comes out as $$.
   changed=0
@@ -162,6 +163,10 @@ refused nul "AGE_NUL=$(printf 'a\000%s' "$CANARY" | age -r "$RECIPIENT" | base64
 " "secret NUL contains a line break or control character"
 refused single-quote "AGE_QUOTE=$(seal "it's-$CANARY")
 " "secret QUOTE contains a single quote"
+refused trailing-backslash "AGE_SLASH=$(seal "$CANARY\\")
+" "secret SLASH ends in a backslash"
+refused trailing-backslashes "AGE_SLASH=$(seal "$CANARY\\\\")
+" "secret SLASH ends in a backslash"
 refused lower-case "AGE_lower=$(seal "$CANARY")
 " "secret name AGE_lower is not upper-case"
 refused no-equals "AGE_BROKEN
@@ -172,6 +177,11 @@ $good
 refused shadowed "GOOD=plain
 $good
 " "secret GOOD is also set as a plain setting"
+refused shadowed-export "export GOOD=plain
+$good
+" "secret GOOD is also set as a plain setting"
+refused process-environment "AGE_HOME=$(seal "$CANARY")
+" "secret HOME is also set in Periphery's environment"
 
 chmod 644 "$T/server.key"
 refused open-identity "$good
