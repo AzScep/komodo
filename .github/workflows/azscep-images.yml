@@ -23,7 +23,7 @@ env:
   # version so they accept each other and upstream components of the release.
   UPSTREAM_VERSION: "2.3.3"
   # Increment when the carried patch set (PATCHES.md) changes.
-  FORK_REVISION: "3"
+  FORK_REVISION: "4"
 
 jobs:
   test:
@@ -45,9 +45,25 @@ jobs:
       - name: Run Periphery tests
         run: cargo test -p komodo_periphery --bin periphery
 
+  decrypt-script:
+    name: Test komodo-age-decrypt
+    runs-on: ubuntu-latest
+    # The Periphery image's base, with the same packages it installs.
+    container: debian:trixie-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Periphery image packages
+        run: |
+          sh bin/periphery/debian-deps.sh
+          apt-get update && apt-get install -y jq
+      - name: Run decrypt script tests
+        run: bin/periphery/tests/komodo-age-decrypt.test.sh
+
   publish:
     name: Build and publish ${{ matrix.component }}
-    needs: test
+    needs: [test, decrypt-script]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
@@ -68,6 +84,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build for testing
+        if: matrix.component == 'periphery'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: bin/periphery/aio.Dockerfile
+          platforms: linux/amd64
+          load: true
+          build-args: |
+            VERSION=${{ env.UPSTREAM_VERSION }}
+          tags: periphery-under-test
+      - name: Run decrypt script tests in the image
+        if: matrix.component == 'periphery'
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$PWD/bin/periphery/tests:/tests:ro" periphery-under-test \
+            -c 'apt-get update -qq && apt-get install -y -qq jq > /dev/null && /tests/komodo-age-decrypt.test.sh /usr/local/bin/komodo-age-decrypt'
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
