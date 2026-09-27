@@ -28,6 +28,9 @@ RUN mv /app/arch/${TARGETPLATFORM} /usr/local/bin/periphery && rm -r /app/arch
 COPY ./bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Decrypts a stack's age secrets in its pre_deploy (see PATCHES.md).
+COPY --chmod=0755 ./bin/periphery/komodo-age-decrypt /usr/local/bin/komodo-age-decrypt
+
 EXPOSE 8120
 
 # Can mount config file to /config/*config*.toml and it will be picked up.
